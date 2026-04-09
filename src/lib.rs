@@ -1,24 +1,14 @@
 #![cfg_attr(test, feature(test))]
 
-use std::collections::HashMap;
-use std::sync::{
-    Arc,
-    atomic::{AtomicU32, Ordering},
-};
-use wasmedge_sdk::{
-    CallingFrame as WasmEdgeCallingFrame, ImportObjectBuilder, Instance as WasmEdgeInstance,
-    Module as WasmEdgeModule, Store as WasmEdgeStore, Vm, WasmValue as WasmEdgeValue,
-    error::CoreError, params, vm::SyncInst as WasmEdgeSyncInst,
-};
-use wasmer::{
-    Function, FunctionEnv, FunctionEnvMut, Instance as WasmerInstance, Module as WasmerModule,
-    Store as WasmerStore, imports,
-};
-use wasmer_compiler_llvm::LLVM;
 use wasmi::{
     Caller as WasmiCaller, Engine as WasmiEngine, Linker as WasmiLinker, Module as WasmiModule,
     Store as WasmiStore,
 };
+use wasmer::{
+    imports, Function, FunctionEnv, FunctionEnvMut, Instance as WasmerInstance,
+    Module as WasmerModule, Store as WasmerStore,
+};
+use wasmer_compiler_llvm::LLVM;
 use wasmtime::{
     Caller as WasmtimeCaller, Engine as WasmtimeEngine, Linker as WasmtimeLinker,
     Module as WasmtimeModule, Store as WasmtimeStore,
@@ -105,67 +95,24 @@ pub fn call_hello_1000_times_wasmer() -> Result<u32, Box<dyn std::error::Error +
     };
 
     let instance = WasmerInstance::new(&mut store, &module, &import_object)?;
-    let hello = instance
-        .exports
-        .get_typed_function::<(), ()>(&store, "hello")?;
+    let hello = instance.exports.get_typed_function::<(), ()>(&store, "hello")?;
     hello.call(&mut store)?;
     Ok(*env.as_ref(&store))
-}
-
-pub fn call_hello_1000_times_wasmedge() -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
-    let (mut vm, host_calls) = instantiate_wasmedge_benchmark_module()?;
-    vm.run_func(Some("benchmark"), "hello", params!())?;
-    Ok(host_calls.load(Ordering::Relaxed))
 }
 
 fn wasmer_host_hello(mut env: FunctionEnvMut<'_, u32>, _param: i32) {
     *env.data_mut() += 1;
 }
 
-fn wasmedge_host_hello(
-    host_calls: &mut Arc<AtomicU32>,
-    _instance: &mut WasmEdgeInstance,
-    _frame: &mut WasmEdgeCallingFrame,
-    _args: Vec<WasmEdgeValue>,
-) -> Result<Vec<WasmEdgeValue>, CoreError> {
-    host_calls.fetch_add(1, Ordering::Relaxed);
-    Ok(vec![])
-}
-
-fn instantiate_wasmedge_benchmark_module() -> Result<
-    (Vm<'static, dyn WasmEdgeSyncInst>, Arc<AtomicU32>),
-    Box<dyn std::error::Error + Send + Sync>,
-> {
-    let wasm = module_wasm();
-    let host_calls = Arc::new(AtomicU32::new(0));
-    let mut import = ImportObjectBuilder::new("host", Arc::clone(&host_calls))?;
-    import.with_func::<i32, ()>("hello", wasmedge_host_hello)?;
-    let leaked_import: &'static mut dyn WasmEdgeSyncInst = Box::leak(Box::new(import.build()));
-    let mut instances = HashMap::<String, &'static mut dyn WasmEdgeSyncInst>::new();
-    instances.insert("host".to_string(), leaked_import);
-
-    let module = WasmEdgeModule::from_bytes(None, wasm)?;
-    let store = WasmEdgeStore::new(None, instances)?;
-    let mut vm = Vm::new(store);
-    vm.register_module(Some("benchmark"), module)?;
-
-    Ok((vm, host_calls))
-}
-
 #[cfg(test)]
 mod benches {
     extern crate test;
 
-    use super::{instantiate_wasmedge_benchmark_module, module_wasm, wasmer_host_hello};
-    use std::sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
-    };
+    use super::{module_wasm, wasmer_host_hello};
     use test::{Bencher, black_box};
-    use wasmedge_sdk::{Vm, vm::SyncInst as WasmEdgeSyncInst};
     use wasmer::{
-        Function, FunctionEnv, Instance as WasmerInstance, Module as WasmerModule,
-        Store as WasmerStore, TypedFunction as WasmerTypedFunction, imports,
+        imports, Function, FunctionEnv, Instance as WasmerInstance, Module as WasmerModule,
+        Store as WasmerStore, TypedFunction as WasmerTypedFunction,
     };
     use wasmer_compiler_llvm::LLVM;
     use wasmi::{
@@ -205,11 +152,6 @@ mod benches {
             .expect("exported function should exist");
 
         (store, instance, hello)
-    }
-
-    fn instantiate_wasmedge_benchmark_module_for_bench()
-    -> (Vm<'static, dyn WasmEdgeSyncInst>, Arc<AtomicU32>) {
-        instantiate_wasmedge_benchmark_module().expect("wasmedge instantiation should succeed")
     }
 
     fn instantiate_wasmer_benchmark_module() -> (
@@ -299,21 +241,8 @@ mod benches {
         let (mut store, env, _instance, hello) = instantiate_wasmer_benchmark_module();
 
         b.iter(|| {
-            hello
-                .call(&mut store)
-                .expect("benchmark execution should succeed");
+            hello.call(&mut store).expect("benchmark execution should succeed");
             black_box(*env.as_ref(&store));
-        });
-    }
-
-    #[bench]
-    fn bench_host_hello_1000x_wasmedge(b: &mut Bencher) {
-        let (mut vm, host_calls) = instantiate_wasmedge_benchmark_module_for_bench();
-
-        b.iter(|| {
-            vm.run_func(Some("benchmark"), "hello", wasmedge_sdk::params!())
-                .expect("benchmark execution should succeed");
-            black_box(host_calls.load(Ordering::Relaxed));
         });
     }
 }
