@@ -1,10 +1,17 @@
 #![cfg_attr(test, feature(test))]
 
-use wasmi::{Caller, Engine, Linker, Module, Store};
+use wasmi::{
+    Caller as WasmiCaller, Engine as WasmiEngine, Linker as WasmiLinker, Module as WasmiModule,
+    Store as WasmiStore,
+};
+use wasmtime::{
+    Caller as WasmtimeCaller, Engine as WasmtimeEngine, Linker as WasmtimeLinker,
+    Module as WasmtimeModule, Store as WasmtimeStore,
+};
 
-const HOST_CALLS_PER_INVOCATION: u32 = 1000;
+pub const HOST_CALLS_PER_INVOCATION: u32 = 1000;
 
-fn module_wat() -> String {
+pub fn module_wat() -> String {
     format!(
         r#"
         (module
@@ -25,26 +32,49 @@ fn module_wat() -> String {
     )
 }
 
-pub fn call_hello_1000_times() -> Result<u32, wasmi::Error> {
-    let wasm = wat::parse_str(module_wat()).expect("WAT module should be valid");
-    let engine = Engine::default();
-    let module = Module::new(&engine, &wasm)?;
+pub fn module_wasm() -> Vec<u8> {
+    wat::parse_str(module_wat()).expect("WAT module should be valid")
+}
 
-    type HostState = u32;
-    let mut store = Store::new(&engine, 0);
-    let mut linker = <Linker<HostState>>::new(&engine);
+pub fn call_hello_1000_times_wasmi() -> Result<u32, wasmi::Error> {
+    let wasm = module_wasm();
+    let engine = WasmiEngine::default();
+    let module = WasmiModule::new(&engine, &wasm)?;
+    let mut store = WasmiStore::new(&engine, 0_u32);
+    let mut linker = WasmiLinker::new(&engine);
 
     linker.func_wrap(
         "host",
         "hello",
-        |_caller: Caller<'_, HostState>, param: i32| -> i32 { param + 1 },
+        |mut caller: WasmiCaller<'_, u32>, _param: i32| {
+            *caller.data_mut() += 1;
+        },
     )?;
 
     let instance = linker.instantiate_and_start(&mut store, &module)?;
-    instance
-        .get_typed_func::<(), ()>(&store, "hello")?
-        .call(&mut store, ())?;
+    let hello = instance.get_typed_func::<(), ()>(&store, "hello")?;
+    hello.call(&mut store, ())?;
+    Ok(*store.data())
+}
 
+pub fn call_hello_1000_times_wasmtime() -> Result<u32, wasmtime::Error> {
+    let wasm = module_wasm();
+    let engine = WasmtimeEngine::default();
+    let module = WasmtimeModule::new(&engine, &wasm)?;
+    let mut store = WasmtimeStore::new(&engine, 0_u32);
+    let mut linker = WasmtimeLinker::new(&engine);
+
+    linker.func_wrap(
+        "host",
+        "hello",
+        |mut caller: WasmtimeCaller<'_, u32>, _param: i32| {
+            *caller.data_mut() += 1;
+        },
+    )?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+    let hello = instance.get_typed_func::<(), ()>(&mut store, "hello")?;
+    hello.call(&mut store, ())?;
     Ok(*store.data())
 }
 
@@ -52,22 +82,35 @@ pub fn call_hello_1000_times() -> Result<u32, wasmi::Error> {
 mod benches {
     extern crate test;
 
-    use super::module_wat;
+    use super::{
+        HOST_CALLS_PER_INVOCATION, call_hello_1000_times_wasmi, call_hello_1000_times_wasmtime,
+        module_wasm,
+    };
     use test::{Bencher, black_box};
-    use wasmi::{Caller, Engine, Instance, Linker, Module, Store, TypedFunc};
+    use wasmi::{
+        Caller as WasmiCaller, Engine as WasmiEngine, Instance as WasmiInstance,
+        Linker as WasmiLinker, Module as WasmiModule, Store as WasmiStore,
+        TypedFunc as WasmiTypedFunc,
+    };
+    use wasmtime::{
+        Caller as WasmtimeCaller, Engine as WasmtimeEngine, Instance as WasmtimeInstance,
+        Linker as WasmtimeLinker, Module as WasmtimeModule, Store as WasmtimeStore,
+        TypedFunc as WasmtimeTypedFunc,
+    };
 
-    fn instantiate_benchmark_module() -> (Store<u32>, Instance, TypedFunc<(), ()>) {
-        let wasm = wat::parse_str(module_wat()).expect("WAT module should be valid");
-        let engine = Engine::default();
-        let module = Module::new(&engine, &wasm).expect("module compilation should succeed");
-        let mut store = Store::new(&engine, 0_u32);
-        let mut linker = Linker::new(&engine);
+    fn instantiate_wasmi_benchmark_module()
+    -> (WasmiStore<u32>, WasmiInstance, WasmiTypedFunc<(), ()>) {
+        let wasm = module_wasm();
+        let engine = WasmiEngine::default();
+        let module = WasmiModule::new(&engine, &wasm).expect("module compilation should succeed");
+        let mut store = WasmiStore::new(&engine, 0_u32);
+        let mut linker = WasmiLinker::new(&engine);
 
         linker
             .func_wrap(
                 "host",
                 "hello",
-                |mut caller: Caller<'_, u32>, _param: i32| {
+                |mut caller: WasmiCaller<'_, u32>, _param: i32| {
                     *caller.data_mut() += 1;
                 },
             )
@@ -83,9 +126,53 @@ mod benches {
         (store, instance, hello)
     }
 
+    fn instantiate_wasmtime_benchmark_module() -> (
+        WasmtimeStore<u32>,
+        WasmtimeInstance,
+        WasmtimeTypedFunc<(), ()>,
+    ) {
+        let wasm = module_wasm();
+        let engine = WasmtimeEngine::default();
+        let module =
+            WasmtimeModule::new(&engine, &wasm).expect("module compilation should succeed");
+        let mut store = WasmtimeStore::new(&engine, 0_u32);
+        let mut linker = WasmtimeLinker::new(&engine);
+
+        linker
+            .func_wrap(
+                "host",
+                "hello",
+                |mut caller: WasmtimeCaller<'_, u32>, _param: i32| {
+                    *caller.data_mut() += 1;
+                },
+            )
+            .expect("host function definition should succeed");
+
+        let instance = linker
+            .instantiate(&mut store, &module)
+            .expect("instantiation should succeed");
+        let hello = instance
+            .get_typed_func::<(), ()>(&mut store, "hello")
+            .expect("exported function should exist");
+
+        (store, instance, hello)
+    }
+
     #[bench]
-    fn bench_host_hello_1000x(b: &mut Bencher) {
-        let (mut store, _instance, hello) = instantiate_benchmark_module();
+    fn bench_host_hello_1000x_wasmi(b: &mut Bencher) {
+        let (mut store, _instance, hello) = instantiate_wasmi_benchmark_module();
+
+        b.iter(|| {
+            hello
+                .call(&mut store, ())
+                .expect("benchmark execution should succeed");
+            black_box(*store.data());
+        });
+    }
+
+    #[bench]
+    fn bench_host_hello_1000x_wasmtime(b: &mut Bencher) {
+        let (mut store, _instance, hello) = instantiate_wasmtime_benchmark_module();
 
         b.iter(|| {
             hello

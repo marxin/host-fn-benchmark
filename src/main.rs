@@ -1,5 +1,8 @@
 fn main() {
-    let calls = host_fn_benchmark::call_hello_1000_times()
-        .expect("Wasm module should call the host function successfully");
-    println!("Executed {calls} host calls");
+    let wasmi_calls = host_fn_benchmark::call_hello_1000_times_wasmi()
+        .expect("wasmi module should call the host function successfully");
+    let wasmtime_calls = host_fn_benchmark::call_hello_1000_times_wasmtime()
+        .expect("wasmtime module should call the host function successfully");
+    println!("Executed {wasmi_calls} host calls with wasmi");
+    println!("Executed {wasmtime_calls} host calls with wasmtime");
 }

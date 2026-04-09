@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 wat = "1.240"
 wasmi = "1.0.9"
+wasmtime = "43.0.0"
 
 [profile.release]
 debug = true
