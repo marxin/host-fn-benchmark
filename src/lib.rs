@@ -14,7 +14,7 @@ use wasmtime::{
     Module as WasmtimeModule, Store as WasmtimeStore,
 };
 
-pub const HOST_CALLS_PER_INVOCATION: u32 = 1000;
+pub const HOST_CALLS_PER_INVOCATION: u32 = 1_000_000;
 
 pub fn module_wat() -> String {
     format!(
@@ -41,7 +41,7 @@ pub fn module_wasm() -> Vec<u8> {
     wat::parse_str(module_wat()).expect("WAT module should be valid")
 }
 
-pub fn call_hello_1000_times_wasmi() -> Result<u32, wasmi::Error> {
+pub fn call_hello_million_times_times_wasmi() -> Result<u32, wasmi::Error> {
     let wasm = module_wasm();
     let engine = WasmiEngine::default();
     let module = WasmiModule::new(&engine, &wasm)?;
@@ -62,7 +62,7 @@ pub fn call_hello_1000_times_wasmi() -> Result<u32, wasmi::Error> {
     Ok(*store.data())
 }
 
-pub fn call_hello_1000_times_wasmtime() -> Result<u32, wasmtime::Error> {
+pub fn call_hello_million_times_times_wasmtime() -> Result<u32, wasmtime::Error> {
     let wasm = module_wasm();
     let engine = WasmtimeEngine::default();
     let module = WasmtimeModule::new(&engine, &wasm)?;
@@ -83,7 +83,8 @@ pub fn call_hello_1000_times_wasmtime() -> Result<u32, wasmtime::Error> {
     Ok(*store.data())
 }
 
-pub fn call_hello_1000_times_wasmer() -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+pub fn call_hello_million_times_times_wasmer()
+-> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
     let wasm = module_wasm();
     let mut store = WasmerStore::new(LLVM::new());
     let module = WasmerModule::new(&store, &wasm)?;
@@ -215,7 +216,7 @@ mod benches {
     }
 
     #[bench]
-    fn bench_host_hello_1000x_wasmi(b: &mut Bencher) {
+    fn bench_host_hello_million_times_wasmi(b: &mut Bencher) {
         let (mut store, _instance, hello) = instantiate_wasmi_benchmark_module();
 
         b.iter(|| {
@@ -227,7 +228,7 @@ mod benches {
     }
 
     #[bench]
-    fn bench_host_hello_1000x_wasmtime(b: &mut Bencher) {
+    fn bench_host_hello_million_times_wasmtime(b: &mut Bencher) {
         let (mut store, _instance, hello) = instantiate_wasmtime_benchmark_module();
 
         b.iter(|| {
@@ -239,7 +240,7 @@ mod benches {
     }
 
     #[bench]
-    fn bench_host_hello_1000x_wasmer(b: &mut Bencher) {
+    fn bench_host_hello_million_times_wasmer(b: &mut Bencher) {
         let (mut store, env, _instance, hello) = instantiate_wasmer_benchmark_module();
 
         b.iter(|| {
