@@ -20,11 +20,24 @@ pub fn module_wat() -> String {
     format!(
         r#"
         (module
-            (import "host" "hello" (func $host_hello (param i32)))
+            (import "host" "hello" (func $host_hello
+                (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
+                (result i32)))
             (func $hello_loop (local $remaining i32)
                 (local.set $remaining (i32.const {HOST_CALLS_PER_INVOCATION}))
                 (loop $repeat
-                    (call $host_hello (i32.const 3))
+                    (drop
+                        (call $host_hello
+                            (i32.const 13)
+                            (i32.const 87)
+                            (i32.const 41)
+                            (i32.const 92)
+                            (i32.const 56)
+                            (i32.const 74)
+                            (i32.const 18)
+                            (i32.const 65)
+                            (i32.const 29)
+                            (i32.const 90)))
                     (local.set $remaining (i32.sub (local.get $remaining) (i32.const 1)))
                     (br_if $repeat (i32.gt_s (local.get $remaining) (i32.const 0)))
                 )
@@ -51,8 +64,20 @@ pub fn call_hello_million_times_times_wasmi() -> Result<u32, wasmi::Error> {
     linker.func_wrap(
         "host",
         "hello",
-        |mut caller: WasmiCaller<'_, u32>, _param: i32| {
+        |mut caller: WasmiCaller<'_, u32>,
+         _a1: i32,
+         _a2: i32,
+         _a3: i32,
+         _a4: i32,
+         a5: i32,
+         _a6: i32,
+         _a7: i32,
+         _a8: i32,
+         _a9: i32,
+         _a10: i32|
+         -> i32 {
             *caller.data_mut() += 1;
+            a5
         },
     )?;
 
@@ -72,8 +97,20 @@ pub fn call_hello_million_times_times_wasmtime() -> Result<u32, wasmtime::Error>
     linker.func_wrap(
         "host",
         "hello",
-        |mut caller: WasmtimeCaller<'_, u32>, _param: i32| {
+        |mut caller: WasmtimeCaller<'_, u32>,
+         _a1: i32,
+         _a2: i32,
+         _a3: i32,
+         _a4: i32,
+         a5: i32,
+         _a6: i32,
+         _a7: i32,
+         _a8: i32,
+         _a9: i32,
+         _a10: i32|
+         -> i32 {
             *caller.data_mut() += 1;
+            a5
         },
     )?;
 
@@ -103,8 +140,21 @@ pub fn call_hello_million_times_times_wasmer()
     Ok(*env.as_ref(&store))
 }
 
-fn wasmer_host_hello(mut env: FunctionEnvMut<'_, u32>, _param: i32) {
+fn wasmer_host_hello(
+    mut env: FunctionEnvMut<'_, u32>,
+    _a1: i32,
+    _a2: i32,
+    _a3: i32,
+    _a4: i32,
+    a5: i32,
+    _a6: i32,
+    _a7: i32,
+    _a8: i32,
+    _a9: i32,
+    _a10: i32,
+) -> i32 {
     *env.data_mut() += 1;
+    a5
 }
 
 #[cfg(test)]
@@ -141,8 +191,20 @@ mod benches {
             .func_wrap(
                 "host",
                 "hello",
-                |mut caller: WasmiCaller<'_, u32>, _param: i32| {
+                |mut caller: WasmiCaller<'_, u32>,
+                 _a1: i32,
+                 _a2: i32,
+                 _a3: i32,
+                 _a4: i32,
+                 a5: i32,
+                 _a6: i32,
+                 _a7: i32,
+                 _a8: i32,
+                 _a9: i32,
+                 _a10: i32|
+                 -> i32 {
                     *caller.data_mut() += 1;
+                    a5
                 },
             )
             .expect("host function definition should succeed");
@@ -199,8 +261,20 @@ mod benches {
             .func_wrap(
                 "host",
                 "hello",
-                |mut caller: WasmtimeCaller<'_, u32>, _param: i32| {
+                |mut caller: WasmtimeCaller<'_, u32>,
+                 _a1: i32,
+                 _a2: i32,
+                 _a3: i32,
+                 _a4: i32,
+                 a5: i32,
+                 _a6: i32,
+                 _a7: i32,
+                 _a8: i32,
+                 _a9: i32,
+                 _a10: i32|
+                 -> i32 {
                     *caller.data_mut() += 1;
+                    a5
                 },
             )
             .expect("host function definition should succeed");
