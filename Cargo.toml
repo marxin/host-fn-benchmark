@@ -9,6 +9,7 @@ wasmi = "1.0.9"
 wasmtime = "43.0.0"
 wasmer = { version = "7.1.0", default-features = false, features = ["compiler", "llvm", "sys", "wat"] }
 wasmer-compiler-llvm = "7.1.0"
+wasmedge-sdk = { version = "0.14.0", features = ["standalone"] }
 
 [profile.release]
 debug = true
