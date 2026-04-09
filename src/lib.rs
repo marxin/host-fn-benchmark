@@ -4,6 +4,11 @@ use wasmi::{
     Caller as WasmiCaller, Engine as WasmiEngine, Linker as WasmiLinker, Module as WasmiModule,
     Store as WasmiStore,
 };
+use wasmer::{
+    imports, Function, FunctionEnv, FunctionEnvMut, Instance as WasmerInstance,
+    Module as WasmerModule, Store as WasmerStore,
+};
+use wasmer_compiler_llvm::LLVM;
 use wasmtime::{
     Caller as WasmtimeCaller, Engine as WasmtimeEngine, Linker as WasmtimeLinker,
     Module as WasmtimeModule, Store as WasmtimeStore,
@@ -78,15 +83,38 @@ pub fn call_hello_1000_times_wasmtime() -> Result<u32, wasmtime::Error> {
     Ok(*store.data())
 }
 
+pub fn call_hello_1000_times_wasmer() -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+    let wasm = module_wasm();
+    let mut store = WasmerStore::new(LLVM::new());
+    let module = WasmerModule::new(&store, &wasm)?;
+    let env = FunctionEnv::new(&mut store, 0_u32);
+    let import_object = imports! {
+        "host" => {
+            "hello" => Function::new_typed_with_env(&mut store, &env, wasmer_host_hello),
+        }
+    };
+
+    let instance = WasmerInstance::new(&mut store, &module, &import_object)?;
+    let hello = instance.exports.get_typed_function::<(), ()>(&store, "hello")?;
+    hello.call(&mut store)?;
+    Ok(*env.as_ref(&store))
+}
+
+fn wasmer_host_hello(mut env: FunctionEnvMut<'_, u32>, _param: i32) {
+    *env.data_mut() += 1;
+}
+
 #[cfg(test)]
 mod benches {
     extern crate test;
 
-    use super::{
-        HOST_CALLS_PER_INVOCATION, call_hello_1000_times_wasmi, call_hello_1000_times_wasmtime,
-        module_wasm,
-    };
+    use super::{module_wasm, wasmer_host_hello};
     use test::{Bencher, black_box};
+    use wasmer::{
+        imports, Function, FunctionEnv, Instance as WasmerInstance, Module as WasmerModule,
+        Store as WasmerStore, TypedFunction as WasmerTypedFunction,
+    };
+    use wasmer_compiler_llvm::LLVM;
     use wasmi::{
         Caller as WasmiCaller, Engine as WasmiEngine, Instance as WasmiInstance,
         Linker as WasmiLinker, Module as WasmiModule, Store as WasmiStore,
@@ -124,6 +152,32 @@ mod benches {
             .expect("exported function should exist");
 
         (store, instance, hello)
+    }
+
+    fn instantiate_wasmer_benchmark_module() -> (
+        WasmerStore,
+        FunctionEnv<u32>,
+        WasmerInstance,
+        WasmerTypedFunction<(), ()>,
+    ) {
+        let wasm = module_wasm();
+        let mut store = WasmerStore::new(LLVM::new());
+        let module = WasmerModule::new(&store, &wasm).expect("module compilation should succeed");
+        let env = FunctionEnv::new(&mut store, 0_u32);
+        let import_object = imports! {
+            "host" => {
+                "hello" => Function::new_typed_with_env(&mut store, &env, wasmer_host_hello),
+            }
+        };
+
+        let instance = WasmerInstance::new(&mut store, &module, &import_object)
+            .expect("instantiation should succeed");
+        let hello = instance
+            .exports
+            .get_typed_function::<(), ()>(&store, "hello")
+            .expect("exported function should exist");
+
+        (store, env, instance, hello)
     }
 
     fn instantiate_wasmtime_benchmark_module() -> (
@@ -179,6 +233,16 @@ mod benches {
                 .call(&mut store, ())
                 .expect("benchmark execution should succeed");
             black_box(*store.data());
+        });
+    }
+
+    #[bench]
+    fn bench_host_hello_1000x_wasmer(b: &mut Bencher) {
+        let (mut store, env, _instance, hello) = instantiate_wasmer_benchmark_module();
+
+        b.iter(|| {
+            hello.call(&mut store).expect("benchmark execution should succeed");
+            black_box(*env.as_ref(&store));
         });
     }
 }

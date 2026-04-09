@@ -7,6 +7,8 @@ edition = "2024"
 wat = "1.240"
 wasmi = "1.0.9"
 wasmtime = "43.0.0"
+wasmer = { version = "7.1.0", default-features = false, features = ["compiler", "llvm", "sys", "wat"] }
+wasmer-compiler-llvm = "7.1.0"
 
 [profile.release]
 debug = true
