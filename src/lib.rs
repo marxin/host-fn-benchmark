@@ -1,14 +1,14 @@
 #![cfg_attr(test, feature(test))]
 
+use wasmer::{
+    Function, FunctionEnv, FunctionEnvMut, Instance as WasmerInstance, Module as WasmerModule,
+    Store as WasmerStore, imports,
+};
+use wasmer_compiler_llvm::LLVM;
 use wasmi::{
     Caller as WasmiCaller, Engine as WasmiEngine, Linker as WasmiLinker, Module as WasmiModule,
     Store as WasmiStore,
 };
-use wasmer::{
-    imports, Function, FunctionEnv, FunctionEnvMut, Instance as WasmerInstance,
-    Module as WasmerModule, Store as WasmerStore,
-};
-use wasmer_compiler_llvm::LLVM;
 use wasmtime::{
     Caller as WasmtimeCaller, Engine as WasmtimeEngine, Linker as WasmtimeLinker,
     Module as WasmtimeModule, Store as WasmtimeStore,
@@ -95,7 +95,9 @@ pub fn call_hello_1000_times_wasmer() -> Result<u32, Box<dyn std::error::Error +
     };
 
     let instance = WasmerInstance::new(&mut store, &module, &import_object)?;
-    let hello = instance.exports.get_typed_function::<(), ()>(&store, "hello")?;
+    let hello = instance
+        .exports
+        .get_typed_function::<(), ()>(&store, "hello")?;
     hello.call(&mut store)?;
     Ok(*env.as_ref(&store))
 }
@@ -111,8 +113,8 @@ mod benches {
     use super::{module_wasm, wasmer_host_hello};
     use test::{Bencher, black_box};
     use wasmer::{
-        imports, Function, FunctionEnv, Instance as WasmerInstance, Module as WasmerModule,
-        Store as WasmerStore, TypedFunction as WasmerTypedFunction,
+        Function, FunctionEnv, Instance as WasmerInstance, Module as WasmerModule,
+        Store as WasmerStore, TypedFunction as WasmerTypedFunction, imports,
     };
     use wasmer_compiler_llvm::LLVM;
     use wasmi::{
@@ -241,7 +243,9 @@ mod benches {
         let (mut store, env, _instance, hello) = instantiate_wasmer_benchmark_module();
 
         b.iter(|| {
-            hello.call(&mut store).expect("benchmark execution should succeed");
+            hello
+                .call(&mut store)
+                .expect("benchmark execution should succeed");
             black_box(*env.as_ref(&store));
         });
     }
