@@ -1,0 +1,11 @@
+[package]
+name = "host-fn-benchmark"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wat = "1.240"
+wasmi = "1.0.9"
+
+[profile.release]
+debug = true
