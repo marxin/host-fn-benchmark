@@ -2,9 +2,8 @@
 
 use wasmer::{
     Function, FunctionEnv, FunctionEnvMut, Instance as WasmerInstance, Module as WasmerModule,
-    Store as WasmerStore, imports,
+    Store as WasmerStore, imports, sys::LLVM,
 };
-use wasmer_compiler_llvm::LLVM;
 use wasmi::{
     Caller as WasmiCaller, Engine as WasmiEngine, Linker as WasmiLinker, Module as WasmiModule,
     Store as WasmiStore,
@@ -14,7 +13,7 @@ use wasmtime::{
     Module as WasmtimeModule, Store as WasmtimeStore,
 };
 
-pub const HOST_CALLS_PER_INVOCATION: u32 = 1_000_000;
+pub const HOST_CALLS_PER_INVOCATION: u32 = 10_000_000;
 
 pub fn module_wat() -> String {
     format!(
@@ -165,9 +164,8 @@ mod benches {
     use test::{Bencher, black_box};
     use wasmer::{
         Function, FunctionEnv, Instance as WasmerInstance, Module as WasmerModule,
-        Store as WasmerStore, TypedFunction as WasmerTypedFunction, imports,
+        Store as WasmerStore, TypedFunction as WasmerTypedFunction, imports, sys::LLVM,
     };
-    use wasmer_compiler_llvm::LLVM;
     use wasmi::{
         Caller as WasmiCaller, Engine as WasmiEngine, Instance as WasmiInstance,
         Linker as WasmiLinker, Module as WasmiModule, Store as WasmiStore,
